@@ -1,134 +1,61 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from scipy.signal import savgol_filter
 import pandas as pd
 import cv2
-from tkinter import Tk, Button, Label, filedialog, simpledialog, StringVar
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-class MTFAnalyzer:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("MTF Analyzer")
-        self.root.geometry("800x600")
+# Function to visualize image in GUI
+def visualize_image(path):
+    image = plt.imread(path)
+    plt.imshow(image, cmap='gray')
+    plt.yticks([])
+    plt.xticks([])
+    plt.title("Image of Interest")
+    plt.show()
 
-        self.image_path = None
-        self.image = None
-        self.roi_bounds = None
-        self.filtered_signal = StringVar(value="no")
-        
-        # Create buttons
-        self.load_image_button = Button(root, text="Load Image", command=self.load_image)
-        self.load_image_button.pack()
+# Function to visualize ROIs in image
+def visualize_image_ROI(path):
+    image = plt.imread(path)
+    roi_bounds = pd.read_csv(path.replace('01.bmp', 'ROI_bounds.csv'))
 
-        self.load_roi_button = Button(root, text="Load ROI Bounds", command=self.load_roi_bounds)
-        self.load_roi_button.pack()
+    colors = ['red', 'blue', 'yellow', 'green', 'purple']
+    plt.imshow(image, cmap='gray')
+    for i in roi_bounds.index:
+        plt.gca().add_patch(patches.Rectangle((roi_bounds.iloc[i][0], roi_bounds.iloc[i][1]),
+                                              roi_bounds.iloc[i][2], roi_bounds.iloc[i][3],
+                                              linewidth=1, edgecolor=colors[i], facecolor='none'))
+    plt.xticks([])
+    plt.yticks([])
+    plt.title("Image with pre-selected ROIs")
+    plt.show()
 
-        self.visualize_button = Button(root, text="Visualize Image", command=self.visualize_image)
-        self.visualize_button.pack()
+# Function to process MTF
+def MTF_process(ROI, output, filtered):
+    ESF = ROI.mean(axis=0)
+    if filtered == 'yes':
+        ESF = savgol_filter(ESF, 5, 1)
+    LSF = np.abs(np.diff(ESF))
 
-        self.visualize_roi_button = Button(root, text="Visualize Image with ROIs", command=self.visualize_image_ROI)
-        self.visualize_roi_button.pack()
+    MTF = np.abs(np.fft.fft(LSF))
+    MTF = MTF[:] / np.max(MTF)
+    MTF = MTF[:len(MTF) // 2]
 
-        self.filter_button = Button(root, text="Filter Line Scan", command=self.set_filter)
-        self.filter_button.pack()
-
-        self.mtf_button = Button(root, text="Visualize MTF", command=self.visualize_mtf)
-        self.mtf_button.pack()
-
-        self.select_roi_button = Button(root, text="Select ROI", command=self.select_roi)
-        self.select_roi_button.pack()
-
-    def load_image(self):
-        self.image_path = filedialog.askopenfilename()
-        self.image = plt.imread(self.image_path)
-        self.show_message("Image loaded successfully.")
-
-    def load_roi_bounds(self):
-        roi_bounds_path = filedialog.askopenfilename()
-        self.roi_bounds = pd.read_csv(roi_bounds_path)
-        self.show_message("ROI bounds loaded successfully.")
-
-    def visualize_image(self):
-        if self.image is not None:
-            plt.imshow(self.image, cmap='gray')
-            plt.yticks([])
-            plt.xticks([])
-            plt.title("Image of Interest")
-            self.show_plot()
-        else:
-            self.show_message("Please load an image first.")
-
-    def visualize_image_ROI(self):
-        if self.image is not None and self.roi_bounds is not None:
-            colors = ['red', 'blue', 'yellow', 'green', 'purple']
-            plt.imshow(self.image, cmap='gray')
-            for i in self.roi_bounds.index:
-                plt.gca().add_patch(patches.Rectangle((self.roi_bounds.iloc[i][0], self.roi_bounds.iloc[i][1]),
-                                                      self.roi_bounds.iloc[i][2], self.roi_bounds.iloc[i][3],
-                                                      linewidth=1, edgecolor=colors[i], facecolor='none'))
-            plt.xticks([])
-            plt.yticks([])
-            plt.title("Image with Pre-selected ROIs")
-            self.show_plot()
-        else:
-            self.show_message("Please load both image and ROI bounds.")
-
-    def set_filter(self):
-        self.filtered_signal.set(simpledialog.askstring("Input", "Do you want to filter the line scan? (yes/no)"))
-
-    def visualize_mtf(self):
-        if self.image is not None and self.roi_bounds is not None:
-            colors = ['red', 'blue', 'yellow', 'green', 'purple']
-            plt.figure(figsize=(9, 3), dpi=300)
-            plt.subplot(121)
-            plt.imshow(self.image, cmap='gray')
-            for i in self.roi_bounds.index:
-                plt.gca().add_patch(patches.Rectangle((self.roi_bounds.iloc[i][0], self.roi_bounds.iloc[i][1]),
-                                                      self.roi_bounds.iloc[i][2], self.roi_bounds.iloc[i][3],
-                                                      linewidth=1, edgecolor=colors[i], facecolor='none'))
-            plt.xticks([])
-            plt.yticks([])
-
-            plt.subplot(122)
-            for i in self.roi_bounds.index:
-                ROI = self.image[int(self.roi_bounds.iloc[i][1]):int(self.roi_bounds.iloc[i][1] + self.roi_bounds.iloc[i][3]), 
-                                int(self.roi_bounds.iloc[i][0]):int(self.roi_bounds.iloc[i][0] + self.roi_bounds.iloc[i][2])]
-                
-                MTF_vals = self.MTF_process(ROI, 'MTF', self.filtered_signal.get())
-                
-                plt.plot(np.arange(0, len(MTF_vals)), MTF_vals, color=colors[i], linewidth=1, linestyle='solid', label='ROI ' + str(i))
-                plt.ylabel('Normalized MTF')
-                plt.xlabel('Spatial Frequency')
-                plt.legend(fontsize=5)
-                if self.filtered_signal.get() == 'yes': plt.title('Using filtered edge profile')
-                if self.filtered_signal.get() == 'no': plt.title('Using unfiltered edge profile')
-            self.show_plot()
-        else:
-            self.show_message("Please load both image and ROI bounds.")
-
-    def select_roi(self):
-        if self.image is not None:
-            roi_coords = cv2.selectROI(cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB))
-            ROI = self.image[int(roi_coords[1]):int(roi_coords[1] + roi_coords[3]), int(roi_coords[0]):int(roi_coords[0] + roi_coords[2])]
-            plt.imshow(ROI, cmap="gray")
-            plt.xticks([])
-            plt.yticks([])
-            plt.show()
-
-            method = simpledialog.askstring("Input", "Which method to use? (individual/average)")
-            self.filtered_signal.set(simpledialog.askstring("Input", "Do you want to filter the line scan? (yes/no)"))
-
-            if method == "average":
-                self.visualize_mtf_roi_average(ROI)
-            elif method == "individual":
-                self.visualize_mtf_roi_individual(ROI)
-        else:
-            self.show_message("Please load an image first.")
-
-    def MTF_process(self, ROI, output, filtered):
-        ESF = ROI.mean(axis=0)
+    if output == 'ESF':
+        return np.array(ESF)
+    elif output == 'LSF':
+        return np.array(LSF)
+    elif output == 'MTF':
+        return np.array(MTF)
+    
+def MTF_process_individual(ROI, output, filtered):
+    ESF_vals = []
+    LSF_vals = []
+    MTF_vals = []
+    for i in range(len(ROI)):
+        ESF = ROI[i]
         if filtered == 'yes':
             ESF = savgol_filter(ESF, 5, 1)
         LSF = np.abs(np.diff(ESF))
@@ -136,89 +63,195 @@ class MTFAnalyzer:
         MTF = np.abs(np.fft.fft(LSF))
         MTF = MTF[:]/np.max(MTF)
         MTF = MTF[:len(MTF)//2]
-        
-        if output == 'ESF': return np.array(ESF)
-        if output == 'LSF': return np.array(LSF)
-        if output == 'MTF': return np.array(MTF)
 
-    def MTF_process_individual(self, ROI, output, filtered):
-        ESF_vals, LSF_vals, MTF_vals = [], [], []
-        for i in range(len(ROI)):
-            ESF = ROI[i]
-            if filtered == 'yes':
-                ESF = savgol_filter(ESF, 5, 1)
-            LSF = np.abs(np.diff(ESF))
-            
-            MTF = np.abs(np.fft.fft(LSF))
-            MTF = MTF[:]/np.max(MTF)
-            MTF = MTF[:len(MTF)//2]
-            
-            ESF_vals.append(ESF)
-            LSF_vals.append(LSF)
-            MTF_vals.append(MTF)
-        
-        if output == 'ESF': return np.array(ESF_vals)
-        if output == 'LSF': return np.array(LSF_vals)
-        if output == 'MTF': return np.array(MTF_vals)
+        ESF_vals.append(ESF)
+        LSF_vals.append(LSF)
+        MTF_vals.append(MTF)
 
-    def visualize_mtf_roi_average(self, ROI):
-        ESF = self.MTF_process(ROI, 'ESF', self.filtered_signal.get())
-        LSF = self.MTF_process(ROI, 'LSF', self.filtered_signal.get())
-        MTF = self.MTF_process(ROI, 'MTF', self.filtered_signal.get())
-        
-        plt.figure(figsize=(18, 3), dpi=150)
+    if output == 'ESF':
+        return np.array(ESF_vals)
+    if output == 'LSF':
+        return np.array(LSF_vals)
+    if output == 'MTF':
+        return np.array(MTF_vals)
+    
+
+
+# Function to handle ROI selection and MTF plotting
+def process_selected_roi(image_path):
+    image = plt.imread(image_path)
+    ROI_coords = cv2.selectROI("Select ROI", image)
+    ROI = image[int(ROI_coords[1]):int(ROI_coords[1] + ROI_coords[3]),
+                int(ROI_coords[0]):int(ROI_coords[0] + ROI_coords[2])]
+
+    method = input("Which method to use? (individual/average): ")
+    filtered_signal = input("Do you want to filter the line scan? (yes/no): ")
+
+    if method == "average":
+        ESF = MTF_process(ROI, 'ESF', filtered_signal)
+        LSF = MTF_process(ROI, 'LSF', filtered_signal)
+        MTF = MTF_process(ROI, 'MTF', filtered_signal)
+
+        plt.figure(figsize=(18, 6))
         plt.subplot(131)
-        plt.plot(ESF, 'k.-', linewidth=0.5)
+        plt.plot(ESF, 'k.-')
         plt.ylabel('Slanted Edge Intensity Profile')
         plt.xlabel('Pixel')
-        
+
         plt.subplot(132)
-        plt.plot(LSF, 'k.-', linewidth=0.5)
+        plt.plot(LSF, 'k.-')
         plt.ylabel('Line Spread Function')
         plt.xlabel('Pixel')
-        
+
         plt.subplot(133)
-        plt.plot(MTF, 'k.-', linewidth=0.5)
+        plt.plot(MTF, 'k.-')
         plt.ylabel('MTF (normalized)')
         plt.xlabel('Spatial Frequency')
+        plt.tight_layout()
         plt.show()
 
-    def visualize_mtf_roi_individual(self, ROI):
-        ESF_v = self.MTF_process_individual(ROI, 'ESF', self.filtered_signal.get())
-        LSF_v = self.MTF_process_individual(ROI, 'LSF', self.filtered_signal.get())
-        MTF_v = self.MTF_process_individual(ROI, 'MTF', self.filtered_signal.get())
-        
-        plt.figure(figsize=(18, 3), dpi=150)
+    elif method == "individual":
+        ESF_v = MTF_process_individual(ROI, 'ESF', filtered_signal)
+        LSF_v = MTF_process_individual(ROI, 'LSF', filtered_signal)
+        MTF_v = MTF_process_individual(ROI, 'MTF', filtered_signal)
+
+        plt.figure(figsize=(18, 6))
         plt.subplot(131)
         for ESF in ESF_v:
-            plt.plot(ESF, 'k.-', linewidth=0.5)
+            plt.plot(ESF, 'k.-')
         plt.ylabel('Slanted Edge Intensity Profile')
         plt.xlabel('Pixel')
-        
+
         plt.subplot(132)
         for LSF in LSF_v:
-            plt.plot(LSF, 'k.-', linewidth=0.5)
+            plt.plot(LSF, 'k.-')
         plt.ylabel('Line Spread Function')
         plt.xlabel('Pixel')
-        
+
         plt.subplot(133)
         for MTF in MTF_v:
-            plt.plot(MTF, 'k.-', linewidth=0.5)
+            plt.plot(MTF, 'k.-')
         plt.ylabel('MTF (normalized)')
         plt.xlabel('Spatial Frequency')
+        plt.tight_layout()
         plt.show()
 
-    def show_plot(self):
-        fig = plt.gcf()
-        canvas = FigureCanvasTkAgg(fig, master=self.root)
-        canvas.draw()
-        canvas.get_tk_widget().pack()
+# Function to plot MTF of pre-selected ROIs
+def plot_MTF_preselected_ROIs(image_path, filtered_signal):
+    image = plt.imread(image_path)
+    roi_bounds = pd.read_csv(image_path.replace('01.bmp', 'ROI_bounds.csv'))
 
-    def show_message(self, message):
-        message_label = Label(self.root, text=message)
-        message_label.pack()
-        
-if __name__ == "__main__":
-    root = Tk()
-    app = MTFAnalyzer(root)
-    root.mainloop()
+    plt.figure(figsize=(12, 4))
+    colors = ['red', 'blue', 'yellow', 'green', 'purple']
+    plt.subplot(121)
+    plt.imshow(image, cmap='gray')
+    for i in roi_bounds.index:
+        plt.gca().add_patch(patches.Rectangle((roi_bounds.iloc[i][0], roi_bounds.iloc[i][1]),
+                                              roi_bounds.iloc[i][2], roi_bounds.iloc[i][3],
+                                              linewidth=1, edgecolor=colors[i], facecolor='none'))
+    plt.xticks([])
+    plt.yticks([])
+    plt.title("Image with pre-selected ROIs")
+
+    plt.subplot(122)
+    for i in roi_bounds.index:
+        ROI = image[int(roi_bounds.iloc[i][1]):int(roi_bounds.iloc[i][1] + roi_bounds.iloc[i][3]),
+                    int(roi_bounds.iloc[i][0]):int(roi_bounds.iloc[i][0] + roi_bounds.iloc[i][2])]
+
+        MTF_vals = MTF_process(ROI, 'MTF', filtered_signal)
+        plt.plot(np.arange(0, len(MTF_vals)), MTF_vals, color=colors[i], linewidth=1, linestyle='solid',
+                 label='ROI ' + str(i))
+    plt.ylabel('Normalized MTF')
+    plt.xlabel('Spatial Frequency')
+    plt.legend(fontsize=8)
+    if filtered_signal == 'yes':
+        plt.title('Using filtered edge profile')
+    elif filtered_signal == 'no':
+        plt.title('Using unfiltered edge profile')
+    plt.tight_layout()
+    plt.show()
+
+# Function to plot MTF of pre-selected ROIs using individual line scans
+def plot_MTF_preselected_ROIs_individual(image_path, filtered_signal):
+    image = plt.imread(image_path)
+    roi_bounds = pd.read_csv(image_path.replace('01.bmp', 'ROI_bounds.csv'))
+
+    plt.figure(figsize=(12, 4))
+    colors = ['red', 'blue', 'yellow', 'green', 'purple']
+    plt.subplot(121)
+    plt.imshow(image, cmap='gray')
+    for i in roi_bounds.index:
+        plt.gca().add_patch(patches.Rectangle((roi_bounds.iloc[i][0], roi_bounds.iloc[i][1]),
+                                              roi_bounds.iloc[i][2], roi_bounds.iloc[i][3],
+                                              linewidth=1, edgecolor=colors[i], facecolor='none'))
+    plt.xticks([])
+    plt.yticks([])
+    plt.title("Image with pre-selected ROIs")
+
+    plt.subplot(122)
+    for i in roi_bounds.index:
+        ROI = image[int(roi_bounds.iloc[i][1]):int(roi_bounds.iloc[i][1] + roi_bounds.iloc[i][3]),
+                    int(roi_bounds.iloc[i][0]):int(roi_bounds.iloc[i][0] + roi_bounds.iloc[i][2])]
+
+        MTF_vals = MTF_process_individual(ROI, 'MTF', filtered_signal)
+        MTF_values_median = np.percentile(MTF_vals, 50, axis=0)
+        plt.plot(np.arange(0, len(MTF_values_median)), MTF_values_median, color=colors[i], linewidth=1,
+                 linestyle='solid', label='ROI ' + str(i))
+    plt.ylabel('Normalized MTF')
+    plt.xlabel('Spatial Frequency')
+    plt.legend(fontsize=8)
+    if filtered_signal == 'yes':
+        plt.title('Using filtered edge profile')
+    elif filtered_signal == 'no':
+        plt.title('Using unfiltered edge profile')
+    plt.tight_layout()
+    plt.show()
+
+# Function to handle file selection and initiate visualization
+def browse_file():
+    filename = filedialog.askopenfilename(filetypes=[("Image files", "*.bmp")])
+    if filename:
+        visualize_image(filename)
+
+# Function to handle folder selection and initiate ROI visualization
+def browse_folder():
+    foldername = filedialog.askdirectory()
+    if foldername:
+        visualize_image_ROI(foldername + '/01.bmp')
+
+# Function to handle plotting MTF of pre-selected ROIs
+def plot_preselected_rois():
+    filtered_signal = input("Do you want to filter the line scan? (yes/no): ")
+    plot_MTF_preselected_ROIs('Visualization/01.bmp', filtered_signal)
+
+# Function to handle plotting MTF of pre-selected ROIs using individual scans
+def plot_preselected_rois_individual():
+    filtered_signal = input("Do you want to filter the line scan? (yes/no): ")
+    plot_MTF_preselected_ROIs_individual('Visualization/01.bmp', filtered_signal)
+
+# Creating the main GUI window
+root = tk.Tk()
+root.title("MTF Analysis")
+
+# Adding buttons to browse and visualize functionalities
+frame = tk.Frame(root)
+frame.pack(padx=10, pady=10)
+
+browse_file_button = tk.Button(frame, text="Browse Image", command=browse_file)
+browse_file_button.pack(side=tk.LEFT, padx=5)
+
+browse_folder_button = tk.Button(frame, text="Visualize ROIs", command=browse_folder)
+browse_folder_button.pack(side=tk.LEFT, padx=5)
+
+process_roi_button = tk.Button(frame, text="Select ROI and Process", command=lambda: process_selected_roi('Visualization/01.bmp'))
+process_roi_button.pack(side=tk.LEFT, padx=5)
+
+# Adding buttons for additional plot functionalities
+plot_preselected_rois_button = tk.Button(frame, text="Plot MTF of Pre-selected ROIs", command=plot_preselected_rois)
+plot_preselected_rois_button.pack(side=tk.LEFT, padx=5)
+
+plot_preselected_rois_individual_button = tk.Button(frame, text="Plot MTF of Pre-selected ROIs (Individual)", command=plot_preselected_rois_individual)
+plot_preselected_rois_individual_button.pack(side=tk.LEFT, padx=5)
+
+# Displaying the GUI
+root.mainloop()
