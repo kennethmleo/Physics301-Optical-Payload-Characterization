@@ -113,14 +113,23 @@ class ImageAnalysisApp:
             mtf_b_median = np.percentile(mtf_vals[:, 2], 50, axis=0)
             freq = mtf_vals[:, 3].mean(axis=0)
 
+            mtf_r_30, mtf_r_70 = np.interp(0.3, mtf_r_median[::-1], freq[::-1]), np.interp(0.7, mtf_r_median[::-1], freq[::-1])
+            mtf_g_30, mtf_g_70 = np.interp(0.3, mtf_g_median[::-1], freq[::-1]), np.interp(0.7, mtf_g_median[::-1], freq[::-1])
+            mtf_b_30, mtf_b_70 = np.interp(0.3, mtf_b_median[::-1], freq[::-1]), np.interp(0.7, mtf_b_median[::-1], freq[::-1])
+
             plt.figure(figsize=(8, 6))
-            plt.plot(freq, mtf_r_median, color='red', linestyle='solid', label='red MTF')
-            plt.plot(freq, mtf_g_median, color='green', linestyle='solid', label='green MTF')
-            plt.plot(freq, mtf_b_median, color='blue', linestyle='solid', label='blue MTF')
+            plt.plot(freq, mtf_r_median, color = 'red', linestyle = 'solid', 
+                    label = f'red MTF (30% - {np.round(mtf_r_30,2)}, 70% - {np.round(mtf_r_70,2)})')
+            plt.plot(freq, mtf_g_median, color = 'green', linestyle = 'solid', 
+                    label = f'green MTF (30% - {np.round(mtf_g_30,2)}, 70% - {np.round(mtf_g_70,2)})')
+            plt.plot(freq, mtf_b_median, color = 'blue', linestyle = 'solid', 
+                    label = f'blue MTF (30% - {np.round(mtf_b_30,2)}, 70% - {np.round(mtf_b_70,2)})')
+            plt.axhline(y = 0.3, color = 'black', linestyle = 'dashed')
+            plt.axhline(y = 0.7, color = 'black', linestyle = 'dashed')
             plt.title('Modulation Transfer Function (MTF)')
             plt.xlabel('Spatial Frequency (cycles per pixel)')
             plt.ylabel('Normalized MTF')
-            plt.legend()
+            plt.legend(fontsize = 5)
             plt.show()
         else:
             messagebox.showerror("Error", "No image loaded or ROI not selected!")
