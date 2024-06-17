@@ -1,14 +1,14 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from scipy.ndimage import gaussian_filter1d
-from scipy.signal import fftconvolve
-import tkinter as tk
-from tkinter import filedialog
-from PIL import Image, ImageTk
 import cv2
+from PIL import Image, ImageTk
+from scipy.ndimage import gaussian_filter1d
 
 
+# Function definitions from your original code
 def normalize_smooth_signal(ROI_R, ROI_G, ROI_B):
     profiles = []
     for image_1d in [ROI_R, ROI_G, ROI_B]:
@@ -18,9 +18,10 @@ def normalize_smooth_signal(ROI_R, ROI_G, ROI_B):
         normalized_profile = (smoothed_profile - min_val) / (max_val - min_val)
 
         edge_center = np.argmax(np.abs(np.diff(normalized_profile)))
-        profiles.append(normalized_profile)
 
+        profiles.append(normalized_profile)
     x = np.arange(0 - edge_center, len(normalized_profile) - edge_center)
+
     return x, profiles[0], profiles[1], profiles[2]
 
 
@@ -35,153 +36,187 @@ def compute_area_between_curves(curve1, curve2, curve3):
         return "curve12", max_area
     elif max_area == area2:
         return "curve13", max_area
-    elif max_area == area3:
+    else:
         return "curve23", max_area
 
 
 def compute_lsf_and_mtf(curve):
-    """Compute Line Spread Function (LSF) and Modulation Transfer Function (MTF)."""
     lsf = np.abs(np.diff(curve))
     mtf = np.abs(np.fft.fftshift(np.fft.fft(lsf)))
-    mtf = mtf / np.max(mtf)
+    mtf /= np.max(mtf)
 
     n = len(mtf)
-    sampling_rate = 1  # Assuming each sample corresponds to one pixel
+    sampling_rate = 1
     freq = np.fft.fftshift(np.fft.fftfreq(n)) * sampling_rate
 
     return lsf, mtf[len(mtf) // 2:], freq[len(mtf) // 2:]
 
 
+# Create the main application window
 class ImageAnalysisApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Image Analysis Tool")
 
-        self.image_label = tk.Label(self.root)
-        self.image_label.pack()
+        # Create menu bar
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
 
-        self.select_image_button = tk.Button(self.root, text="Select Image", command=self.load_image)
-        self.select_image_button.pack()
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Open Image", command=self.open_image)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.root.quit)
+        menubar.add_cascade(label="File", menu=file_menu)
 
-        self.analyze_button = tk.Button(self.root, text="Analyze ROI", command=self.analyze_roi, state=tk.DISABLED)
-        self.analyze_button.pack()
+        # Create widgets
+        self.canvas = tk.Canvas(self.root, width=800, height=600)
+        self.canvas.grid(row=0, column=0, columnspan=3, padx=10, pady=10)
 
-        self.canvas = None
-        self.image = None
-        self.roi_coords = None
-        self.roi_patch = None
-        self.current_roi = None
+        self.btn_analyze = tk.Button(self.root, text="Analyze Image", command=self.analyze_image)
+        self.btn_analyze.grid(row=1, column=0, pady=10)
+
+        self.btn_show_mtf = tk.Button(self.root, text="Show MTF", command=self.show_mtf)
+        self.btn_show_mtf.grid(row=1, column=1, pady=10)
+
+        self.btn_show_ca = tk.Button(self.root, text="Show CA", command=self.show_ca)
+        self.btn_show_ca.grid(row=1, column=2, pady=10)
+
+        self.btn_exit = tk.Button(self.root, text="Exit", command=self.root.quit)
+        self.btn_exit.grid(row=1, column=3, pady=10)
+
+        # Initialize variables
         self.image_path = None
+        self.image = None
+        self.ROI_coords = [599, 285, 48, 49]
+        self.ROI_R = None
+        self.ROI_G = None
+        self.ROI_B = None
 
-    def load_image(self):
-        self.image_path = filedialog.askopenfilename(initialdir="./", title="Select Image",
-                                                     filetypes=(("Image files", "*.jpg;*.png;*.jpeg"), ("all files", "*.*")))
+    def open_image(self):
+        self.image_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg;*.jpeg;*.png;*.tif;*.tiff")])
         if self.image_path:
-            self.image = plt.imread(self.image_path)
-            self.display_image()
-            self.analyze_button.config(state=tk.NORMAL)
+            self.image = cv2.imread(self.image_path)
+            self.show_image_with_roi()
 
-    def display_image(self):
-        if self.canvas:
-            self.canvas.destroy()
+    def show_image_with_roi(self):
+        if self.image is not None:
+            img_rgb = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
+            img_with_roi = img_rgb.copy()
+            cv2.rectangle(img_with_roi, (self.ROI_coords[0], self.ROI_coords[1]),
+                          (self.ROI_coords[0] + self.ROI_coords[2], self.ROI_coords[1] + self.ROI_coords[3]),
+                          (255, 255, 255), 2)
 
-        self.current_roi = None
-        self.roi_coords = None
-        self.roi_patch = None
+            plt_img = np.squeeze(img_with_roi.astype(np.uint8))
+            plt_img = np.transpose(plt_img, (0, 1, 2))
 
-        img = Image.open(self.image_path)
-        img = img.resize((400, 300), Image.ANTIALIAS)
-        img = ImageTk.PhotoImage(image=img)
+            self.photo = ImageTk.PhotoImage(image=Image.fromarray(plt_img))
+            self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
+        else:
+            messagebox.showerror("Error", "No image loaded!")
 
-        self.canvas = tk.Label(self.root, image=img)
-        self.canvas.image = img
-        self.canvas.pack()
+    def analyze_image(self):
+        if self.image is not None:
+            ROI = self.image[self.ROI_coords[1]:self.ROI_coords[1] + self.ROI_coords[3],
+                             self.ROI_coords[0]:self.ROI_coords[0] + self.ROI_coords[2]]
 
-    def analyze_roi(self):
-        if self.roi_coords:
-            ROI = self.image[int(self.roi_coords[1]):int(self.roi_coords[1] + self.roi_coords[3]),
-                  int(self.roi_coords[0]):int(self.roi_coords[0] + self.roi_coords[2])]
+            self.ROI_R = ROI[:, :, 0]
+            self.ROI_G = ROI[:, :, 1]
+            self.ROI_B = ROI[:, :, 2]
 
-            ROI_R = ROI[:, :, 0]
-            ROI_G = ROI[:, :, 1]
-            ROI_B = ROI[:, :, 2]
+            x, r_norm, g_norm, b_norm = normalize_smooth_signal(self.ROI_R[len(self.ROI_R) // 2],
+                                                                self.ROI_G[len(self.ROI_G) // 2],
+                                                                self.ROI_B[len(self.ROI_B) // 2])
 
-            x, r_norm, g_norm, b_norm = normalize_smooth_signal(ROI_R[len(ROI_R) // 2], ROI_G[len(ROI_G) // 2],
-                                                               ROI_B[len(ROI_B) // 2])
             curve1, curve2, curve3 = r_norm, g_norm, b_norm
             which, area = compute_area_between_curves(curve1, curve2, curve3)
-            print(f"Area between highest and lowest curves: {area}")
 
-            plt.figure(figsize=(10, 4))
-            plt.subplot(1, 2, 1)
+            plt.figure(figsize=(8, 6))
             plt.plot(x, curve1, color='red', label='Red Edge Profile')
             plt.plot(x, curve2, color='green', label='Green Edge Profile')
             plt.plot(x, curve3, color='blue', label='Blue Edge Profile')
+
             if which == "curve12":
                 plt.fill_between(x, curve1, curve2, where=(curve1 > curve2), interpolate=True, alpha=0.5, color='black')
             elif which == "curve13":
                 plt.fill_between(x, curve1, curve3, where=(curve1 > curve3), interpolate=True, alpha=0.5, color='black')
             elif which == "curve23":
                 plt.fill_between(x, curve2, curve3, where=(curve2 > curve3), interpolate=True, alpha=0.5, color='black')
+
             plt.xlabel('Pixels (Horizontal)')
             plt.ylabel('Normalized Edge Profile')
             plt.title(f"Edge profile of RGB channels (CA area = {np.round(area, 2)} pixels)")
             plt.legend()
-
-            plt.subplot(1, 2, 2)
-            MTF_values_R = []
-            MTF_values_G = []
-            MTF_values_B = []
-            for j in range(len(ROI_R)):
-                ESF_R = ROI_R[j]
-                ESF_G = ROI_G[j]
-                ESF_B = ROI_B[j]
-
-                MTF_R = compute_lsf_and_mtf(ESF_R)[1]
-                MTF_G = compute_lsf_and_mtf(ESF_G)[1]
-                MTF_B = compute_lsf_and_mtf(ESF_B)[1]
-
-                MTF_values_R.append(MTF_R)
-                MTF_values_G.append(MTF_G)
-                MTF_values_B.append(MTF_B)
-
-            MTF_values_R = np.array(MTF_values_R)
-            MTF_values_R_median = np.percentile(MTF_values_R, 50, axis=0)
-            MTF_values_G = np.array(MTF_values_G)
-            MTF_values_G_median = np.percentile(MTF_values_G, 50, axis=0)
-            MTF_values_B = np.array(MTF_values_B)
-            MTF_values_B_median = np.percentile(MTF_values_B, 50, axis=0)
-
-            plt.plot(np.arange(0, len(MTF_values_R_median)), MTF_values_R_median, color='red', linestyle='solid',
-                     label='red MTF')
-            plt.plot(np.arange(0, len(MTF_values_R_median)), MTF_values_G_median, color='green', linestyle='solid',
-                     label='green MTF')
-            plt.plot(np.arange(0, len(MTF_values_R_median)), MTF_values_B_median, color='blue', linestyle='solid',
-                     label='blue MTF')
-            plt.ylabel('Normalized MTF')
-            plt.xlabel('Spatial Frequency')
-            plt.legend(fontsize=8)
-            plt.tight_layout()
-
             plt.show()
+        else:
+            messagebox.showerror("Error", "No image loaded!")
 
-    def on_click(self, event):
+    def show_mtf(self):
         if self.image is not None:
-            if self.roi_patch:
-                self.roi_patch.remove()
+            ROI = self.image[self.ROI_coords[1]:self.ROI_coords[1] + self.ROI_coords[3],
+                             self.ROI_coords[0]:self.ROI_coords[0] + self.ROI_coords[2]]
 
-            if self.roi_coords:
-                self.roi_coords = None
+            self.ROI_R = ROI[:, :, 0]
+            self.ROI_G = ROI[:, :, 1]
+            self.ROI_B = ROI[:, :, 2]
 
-            x1, y1 = event.x - 25, event.y - 25
-            x2, y2 = event.x + 25, event.y + 25
-            self.roi_coords = (x1, y1, x2 - x1, y2 - y1)
-            self.roi_patch = patches.Rectangle((x1, y1), (x2 - x1), (y2 - y1), linewidth=1, edgecolor='white',
-                                               facecolor='none')
-            self.canvas.create_window(400, 300, window=self.roi_patch)
+            x, r_norm, g_norm, b_norm = normalize_smooth_signal(self.ROI_R[len(self.ROI_R) // 2],
+                                                                self.ROI_G[len(self.ROI_G) // 2],
+                                                                self.ROI_B[len(self.ROI_B) // 2])
+
+            red_lsf, red_mtf, freq = compute_lsf_and_mtf(r_norm)
+            green_lsf, green_mtf, freq = compute_lsf_and_mtf(g_norm)
+            blue_lsf, blue_mtf, freq = compute_lsf_and_mtf(b_norm)
+
+            plt.figure(figsize=(8, 6))
+            plt.plot(freq, red_mtf, color='red', label='Red MTF')
+            plt.plot(freq, green_mtf, color='green', label='Green MTF')
+            plt.plot(freq, blue_mtf, color='blue', label='Blue MTF')
+            plt.title('Modulation Transfer Function (MTF)')
+            plt.xlabel('Spatial Frequency (cycles per pixel)')
+            plt.ylabel('Normalized MTF')
+            plt.legend()
+            plt.grid(True)
+            plt.show()
+        else:
+            messagebox.showerror("Error", "No image loaded!")
+
+    def show_ca(self):
+        if self.image is not None:
+            ROI = self.image[self.ROI_coords[1]:self.ROI_coords[1] + self.ROI_coords[3],
+                             self.ROI_coords[0]:self.ROI_coords[0] + self.ROI_coords[2]]
+
+            self.ROI_R = ROI[:, :, 0]
+            self.ROI_G = ROI[:, :, 1]
+            self.ROI_B = ROI[:, :, 2]
+
+            # Calculate chromatic aberration
+            ca_r = self.ROI_G.astype(np.float32) - self.ROI_R.astype(np.float32)
+            ca_b = self.ROI_G.astype(np.float32) - self.ROI_B.astype(np.float32)
+
+            # Display the chromatic aberration
+            plt.figure(figsize=(10, 8))
+
+            plt.subplot(2, 1, 1)
+            plt.imshow(ca_r, cmap='RdYlBu', vmin=-50, vmax=50)
+            plt.colorbar()
+            plt.title('Chromatic Aberration (Red-Green)')
+            plt.xlabel('Pixel Column')
+            plt.ylabel('Pixel Row')
+
+            plt.subplot(2, 1, 2)
+            plt.imshow(ca_b, cmap='RdYlBu', vmin=-50, vmax=50)
+            plt.colorbar()
+            plt.title('Chromatic Aberration (Blue-Green)')
+            plt.xlabel('Pixel Column')
+            plt.ylabel('Pixel Row')
+
+            plt.tight_layout()
+            plt.show()
+        else:
+            messagebox.showerror("Error", "No image loaded!")
 
 
-# Initialize tkinter app
-root = tk.Tk()
-app = ImageAnalysisApp(root)
-root.mainloop()
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ImageAnalysisApp(root)
+    root.mainloop()
