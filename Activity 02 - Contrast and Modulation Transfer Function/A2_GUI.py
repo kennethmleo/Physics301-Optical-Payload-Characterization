@@ -130,7 +130,8 @@ def process_selected_roi(image_path):
 
         plt.subplot(133)
         for MTF in MTF_v:
-            plt.plot(MTF, 'k.-')
+            plt.plot(MTF, 'k-', linewidth = width)
+        plt.plot(np.percentile(MTF_v, 50, axis = 0), color = 'red')
         plt.ylabel('MTF (normalized)')
         plt.xlabel('Spatial Frequency')
         plt.tight_layout()
