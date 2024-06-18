@@ -16,7 +16,7 @@ background_color = "#282C34"
 button_color = "#61DAFB"
 text_color = "white"
 font_style = "Helvetica"
-default_data_path = ""
+default_data_path = "Visualization/"
 default_image_path = os.path.join(default_data_path, "target_image.png")
 image_path = "Visualization/01.bmp"
 
@@ -56,9 +56,9 @@ def browse_file():
         display_image(filename)
 
 # Function to visualize and process the image for MTF analysis
-def process_selected_roi(image_path):
-    # Placeholder for image processing logic
-    messagebox.showinfo("Info", "Process the selected ROI from the image.")
+# def process_selected_roi(image_path):
+#     # Placeholder for image processing logic
+#     messagebox.showinfo("Info", "Process the selected ROI from the image.")
 
 
 # Function to visualize image in GUI
@@ -139,6 +139,7 @@ def process_selected_roi(image_path):
  # This function will now get options directly from the GUI components instead of input() 
     method = method_var.get()
     filtered_signal = filter_var.get()
+    width = 0.1
 
     if method == "average":
         ESF = MTF_process(ROI, 'ESF', filtered_signal)
@@ -147,7 +148,7 @@ def process_selected_roi(image_path):
 
         plt.figure(figsize=(18, 6))
         plt.subplot(131)
-        plt.plot(ESF, 'k.-')
+        plt.plot(ESF, 'k.-', )
         plt.ylabel('Slanted Edge Intensity Profile')
         plt.xlabel('Pixel')
 
@@ -171,13 +172,13 @@ def process_selected_roi(image_path):
         plt.figure(figsize=(18, 6))
         plt.subplot(131)
         for ESF in ESF_v:
-            plt.plot(ESF, 'k.-')
+            plt.plot(ESF, 'k.-', linewidth = width)
         plt.ylabel('Slanted Edge Intensity Profile')
         plt.xlabel('Pixel')
 
         plt.subplot(132)
         for LSF in LSF_v:
-            plt.plot(LSF, 'k.-')
+            plt.plot(LSF, 'k.-', linewidth = width)
         plt.ylabel('Line Spread Function')
         plt.xlabel('Pixel')
 
@@ -283,7 +284,7 @@ def browse_folder():
 #     filtered_signal = input("Do you want to filter the line scan? (yes/no): ")
 #     plot_MTF_preselected_ROIs_individual('Visualization/01.bmp', filtered_signal)
 
-def plot_MTF_preselected_ROIs(image_path):
+def plot_MTF_preselected_ROIs_2(image_path):
     method = method_var.get()
     filtered_signal = filter_var.get()
     if method == "average":
@@ -292,7 +293,7 @@ def plot_MTF_preselected_ROIs(image_path):
     else:
         messagebox.showerror("Error", "Unsupported method selected")
 
-def plot_MTF_preselected_ROIs_individual(image_path):
+def plot_MTF_preselected_ROIs_individual_2(image_path):
     method = method_var.get()
     filtered_signal = filter_var.get()
     if method == "individual":
@@ -373,8 +374,8 @@ tk.Label(left_frame, text="Loads data from the selected folder and lists availab
 
 # Step 2 and Step 3 placeholders with descriptions
 tk.Label(left_frame, text="Step 2: Analyze MTF for Pre-Selected ROIs", font=(font_style, 16, "bold"), bg=background_color, fg=text_color).pack(fill='x', padx=10, pady=10)
-tk.Button(left_frame, text="Average Line Scan", command=lambda: plot_MTF_preselected_ROIs(image_path), bg=button_color, fg=background_color, font=(font_style, 14)).pack(pady=5)
-tk.Button(left_frame, text="Individual Line Scans", command=lambda: plot_MTF_preselected_ROIs_individual(image_path), bg=button_color, fg=background_color, font=(font_style, 14)).pack(pady=5)
+tk.Button(left_frame, text="Average Line Scan", command=lambda: plot_MTF_preselected_ROIs_2(image_path), bg=button_color, fg=background_color, font=(font_style, 14)).pack(pady=5)
+tk.Button(left_frame, text="Individual Line Scans", command=lambda: plot_MTF_preselected_ROIs_individual_2(image_path), bg=button_color, fg=background_color, font=(font_style, 14)).pack(pady=5)
 
 # tk.Button(left_frame, text="Average of line scan", command=plot_preselected_rois, bg=button_color, fg=background_color, font=(font_style, 14)).pack(pady=5)
 # tk.Button(left_frame, text="Individual line scans", command=plot_preselected_rois_individual, bg=button_color, fg=background_color, font=(font_style, 14)).pack(pady=5)
@@ -394,10 +395,8 @@ tk.Label(left_frame, text="Filter Line Scan:", font=(font_style, 14), bg=backgro
 tk.Checkbutton(left_frame, text="Yes", variable=filter_var, onvalue="yes", offvalue="no", bg=background_color, fg=text_color, selectcolor=background_color).pack(anchor='w', padx=20)
 
 # Button to execute the process with the selected options
-tk.Button(left_frame, text="Process MTF", command=lambda: process_selected_roi(default_image_path), bg=button_color, fg=background_color, font=(font_style, 14)).pack(pady=20)
-
-
-# tk.Button(left_frame, text="Select ROI and Process", command=lambda: process_selected_roi(default_image_path), bg=button_color, fg=background_color, font=(font_style, 14)).pack(pady=5)
+#tk.Button(left_frame, text="Process MTF", command=lambda: process_selected_roi(default_image_path), bg=button_color, fg=background_color, font=(font_style, 14)).pack(pady=20)
+tk.Button(left_frame, text="Select ROI and Process", command=lambda: process_selected_roi(default_image_path), bg=button_color, fg=background_color, font=(font_style, 14)).pack(pady=5)
 
 
 # Display the default image
